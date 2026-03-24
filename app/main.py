@@ -6,9 +6,10 @@ import shutil
 from pathlib import Path
 from urllib.parse import unquote
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from starlette.background import BackgroundTask
+from starlette.datastructures import UploadFile
 
 from app import db
 from app.home import home_page
@@ -108,11 +109,21 @@ async def upload_multipart(request: Request):
         )
     form = await request.form()
     files: list[tuple[str, UploadFile]] = []
+    unnamed = 0
     for _, val in form.multi_items():
-        if isinstance(val, UploadFile) and val.filename:
-            files.append((_secure_filename(val.filename), val))
+        if not isinstance(val, UploadFile):
+            continue
+        raw = val.filename
+        raw = (raw or "").strip() if raw is not None else ""
+        if not raw:
+            raw = "upload.bin" if unnamed == 0 else f"upload-{unnamed}.bin"
+            unnamed += 1
+        files.append((_secure_filename(raw), val))
     if not files:
-        raise HTTPException(status_code=400, detail="No file fields in multipart body")
+        raise HTTPException(
+            status_code=400,
+            detail="No file fields in multipart body (need at least one file part, not only text fields)",
+        )
 
     token = _new_token()
     dest_dir = UPLOAD_DIR / token

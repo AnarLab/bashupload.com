@@ -325,7 +325,10 @@ def home_page() -> HTMLResponse:
     cliEl.textContent = "";
 
     const fd = new FormData();
-    queue.forEach((f) => fd.append("file", f));
+    queue.forEach((f) => {{
+      const name = (f.name && f.name.trim()) ? f.name : "upload.bin";
+      fd.append("file", f, name);
+    }});
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/");
