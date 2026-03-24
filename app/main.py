@@ -97,26 +97,14 @@ async def upload_put(filename: str, request: Request):
     return _upload_response(token, name)
 
 
-@app.api_route("/{filename:path}", methods=["POST"])
-async def upload_post(filename: str, request: Request):
-    ct = request.headers.get("content-type", "").lower()
-    if "multipart/form-data" in ct:
-        raise HTTPException(status_code=400, detail="Use POST / for multipart uploads")
-    name = _secure_filename(filename)
-    token = _new_token()
-    dest = UPLOAD_DIR / token / name
-    await _stream_request_to_path(request, dest)
-    db.insert_upload(token, name, dest, TTL_SECONDS, MAX_DOWNLOADS)
-    return _upload_response(token, name)
-
-
+# Registered before POST /{filename:path} so POST / is always multipart (browser, curl -F).
 @app.post("/")
 async def upload_multipart(request: Request):
     ct = request.headers.get("content-type", "").lower()
     if "multipart/form-data" not in ct:
         raise HTTPException(
             status_code=400,
-            detail="Send multipart/form-data or PUT/POST with a filename in the path",
+            detail="Multipart file uploads use POST / with Content-Type: multipart/form-data; raw body uploads use POST /{filename}",
         )
     form = await request.form()
     files: list[tuple[str, UploadFile]] = []
@@ -150,6 +138,19 @@ async def upload_multipart(request: Request):
         return JSONResponse({"ok": True, "urls": urls, "token": token})
     body = "\n".join(urls) + "\n\nwget " + " ".join(urls) + "\n"
     return PlainTextResponse(body)
+
+
+@app.api_route("/{filename:path}", methods=["POST"])
+async def upload_post(filename: str, request: Request):
+    ct = request.headers.get("content-type", "").lower()
+    if "multipart/form-data" in ct:
+        raise HTTPException(status_code=400, detail="Use POST / for multipart uploads")
+    name = _secure_filename(filename)
+    token = _new_token()
+    dest = UPLOAD_DIR / token / name
+    await _stream_request_to_path(request, dest)
+    db.insert_upload(token, name, dest, TTL_SECONDS, MAX_DOWNLOADS)
+    return _upload_response(token, name)
 
 
 @app.get("/{token}/{filename:path}")
