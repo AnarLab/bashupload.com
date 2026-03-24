@@ -7,10 +7,11 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from starlette.background import BackgroundTask
 
 from app import db
+from app.home import home_page
 from app.config import (
     BASE_URL,
     MAX_DOWNLOADS,
@@ -73,6 +74,11 @@ def _startup():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/")
+def index():
+    return home_page()
 
 
 def _upload_response(token: str, filename: str) -> PlainTextResponse:
@@ -139,6 +145,9 @@ async def upload_multipart(request: Request):
         db.insert_upload(token, fname, path, TTL_SECONDS, MAX_DOWNLOADS)
         urls.append(f"{BASE_URL}/{token}/{fname}")
 
+    accept = request.headers.get("accept", "")
+    if "application/json" in accept:
+        return JSONResponse({"ok": True, "urls": urls, "token": token})
     body = "\n".join(urls) + "\n\nwget " + " ".join(urls) + "\n"
     return PlainTextResponse(body)
 
